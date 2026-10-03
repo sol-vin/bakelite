@@ -1,0 +1,22 @@
+# Crystal build artifacts
+/bin/bakelite
+/bin/bakelite.exe
+/bin/*.exe
+/bin/*.pdb
+/bin/*.dll
+/.crystal/
+/lib/
+/shard.lock
+
+# Test artifacts
+/tmp/
+*.tmp
+spec/fixtures/output/
+spec/fixtures/temp/
+
+# Cache directories
+.bakelite/cache/
+.bakelite/
+
+# Documentation
+/docs/

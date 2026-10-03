@@ -1,0 +1,27 @@
+name: bakelite
+version: 0.1.0
+authors:
+  - Ian / Sol-Vin <contact@solvin.dev>
+
+description: |
+  Next-generation baked and virtual filesystem library for Crystal.
+  Features direct compile-time string bakes, chunked streaming storage,
+  live reader IO with O(chunk_size) RAM bounds, custom volumes with priority
+  layering, compile-time transforms with content-addressed caching, and
+  post-compile binary overlay/appended volume packing.
+
+license: MIT
+
+crystal: ">= 1.10.0"
+
+dependencies:
+  opal:
+    github: sol-vin/opal
+  jasper:
+    github: sol-vin/jasper
+  carbon:
+    github: sol-vin/carbon
+
+targets:
+  bakelite:
+    main: src/cli/main.cr

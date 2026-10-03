@@ -1,0 +1,53 @@
+id: MACROS_AND_VOLUMES
+title: Compile-Time DSL and Volumes
+summary: Using Bakelite macros to embed and organize assets in code.
+track: 03_dsl
+overview: |
+  Bakelite provides a declarative, type-safe macro DSL for embedding single files,
+  folders, and custom volumes directly inside your Crystal application.
+
+sections:
+  - id: topic_01_embedding_macros
+    title: Core Macro Directives
+    summary: Syntax and options for bake and store macros.
+    content: |
+      Include `Bakelite::FS` in your module or class to expose the DSL:
+
+      ```crystal
+      module AppAssets
+        include Bakelite::FS
+
+        # Direct inlined bake
+        bake "config/settings.yml", as_path: "settings.yml"
+
+        # Chunked streaming store
+        store "videos/intro.mp4", chunk_size: 131072, compress: :gzip
+
+        # Entire folder inlined
+        bake_folder "public/icons", prefix: "icons"
+
+        # Entire folder chunked
+        store_folder "assets/audio", prefix: "audio", chunk_size: 65536
+      end
+      ```
+
+  - id: topic_02_volume_management
+    title: Custom Volumes and Union Mounting
+    summary: Isolating subsystems and layering assets by priority.
+    content: |
+      Volumes allow you to namespace assets, configure default compression and chunk size,
+      and prioritize overlays (e.g. mods or DLC):
+
+      ```crystal
+      module AppAssets
+        include Bakelite::FS
+
+        volume :dlc, mount: "dlc", priority: 100 do
+          bake "dlc/extra_levels.json"
+        end
+      end
+      ```
+
+      When querying paths via `AppAssets["dlc/extra_levels.json"]`, the union router
+      automatically inspects mounted volumes in priority order, allowing higher-priority
+      volumes to shadow matching lower-priority files.

@@ -1,0 +1,30 @@
+id: INTRODUCTION
+title: Introduction to Bakelite
+summary: High-performance virtual filesystem and binary container engine for Crystal.
+track: 01_overview
+overview: |
+  Bakelite is a zero-copy, streaming-capable virtual filesystem (BakedFS) for Crystal.
+  It enables developers to embed assets directly into Crystal executables or append them
+  post-compilation as binary containers, with first-class support for chunked compression,
+  custom isolated volumes, union mounts, compile-time content-addressed transforms, and
+  low-memory random-seeking IO.
+
+sections:
+  - id: topic_01_core_concepts
+    title: Dual Storage Paradigm
+    summary: Understanding the distinction between direct inlining and chunked streaming.
+    content: |
+      Bakelite provides two primary storage primitives:
+
+      * **Bake (`bake`)**: Embeds bytes directly as static binary blobs into the Crystal executable. Zero decompression overhead and instantaneous random memory access. Ideal for small configuration files, shaders, templates, and crucial YAML/JSON definitions.
+      * **Store (`store`)**: Divides data into fixed-size chunks (e.g. 64KB), compresses each chunk individually (Deflate, Gzip, or Zlib), and streams them on demand through `Bakelite::FileIO`. Guarantees bounded memory usage regardless of file size (e.g. 2GB audio/video files stream in 64KB RAM).
+
+  - id: topic_02_key_features
+    title: Key Architectural Features
+    summary: Highlights of Bakelite's feature set.
+    content: |
+      * **Streaming IO**: Implements standard Crystal `IO` with arbitrary seeking (`Seek::Set`, `Seek::Current`, `Seek::End`) across compressed chunk boundaries.
+      * **Custom Volumes & Union Mounts**: Organize files into isolated volumes (`Volume`), mount them at prefixes, and layer them with priority shadowing.
+      * **Compile-Time Transforms**: Built-in minification, line-ending normalization, and custom CLI pipelines cached by SHA-256 hash.
+      * **Post-Compile Binary Overlay**: Append assets to precompiled executables or `.bkl` standalone archives without modifying host binary execution.
+      * **Rich Ecosystem Integration**: Powered by `sol-vin/carbon` (versioning), `sol-vin/opal` (CLI terminal styling), and `sol-vin/jasper` (documentation compiler).

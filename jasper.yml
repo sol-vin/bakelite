@@ -1,0 +1,22 @@
+namespace: "Bakelite::Docs"
+source_dir: "docs_src"
+output_dir: "src/bakelite/docs"
+master_file: "src/bakelite/docs.cr"
+
+features:
+  release_guard: true
+  naming_style: "prefixed"
+  prefix_format: "topic_%02d_"
+  table_auto_html: true
+  protect_summary: true
+  summary_table: true
+  master_index: true
+  aliases:
+    - "Docs"
+  quick_start:
+    title: "Bakelite Quick Start"
+    commands:
+      - "shards install"
+      - "crystal spec"
+      - "bin/bakelite pack bin/game.exe assets/ --mount assets"
+      - "bin/bakelite inspect bin/game.exe"
