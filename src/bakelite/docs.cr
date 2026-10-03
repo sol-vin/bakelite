@@ -9,7 +9,7 @@
     #
     # ## Learning Tracks & Topic Index
     #
-    # The documentation is paced into 4 distinct tracks:
+    # The documentation is paced into 6 distinct tracks:
     #
     # ### 1. Overview (`A_OVERVIEW`)
     # <table>
@@ -83,6 +83,42 @@
     #   </tbody>
     # </table>
     #
+    # ### 5. Scale (`E_SCALE`)
+    # <table>
+    #   <thead>
+    #     <tr>
+    #       <th>Submodule</th>
+    #       <th>Title</th>
+    #       <th>Description</th>
+    #     </tr>
+    #   </thead>
+    #   <tbody>
+    #     <tr>
+    #       <td><code>LARGE_ASSET_STREAMING</code></td>
+    #       <td><strong>Large Asset Streaming and Scale (100MB & 1GB)</strong></td>
+    #       <td>Memory bounds, streaming architecture, and scale testing for massive assets.</td>
+    #     </tr>
+    #   </tbody>
+    # </table>
+    #
+    # ### 6. Concurrency (`F_CONCURRENCY`)
+    # <table>
+    #   <thead>
+    #     <tr>
+    #       <th>Submodule</th>
+    #       <th>Title</th>
+    #       <th>Description</th>
+    #     </tr>
+    #   </thead>
+    #   <tbody>
+    #     <tr>
+    #       <td><code>THREAD_SAFETY</code></td>
+    #       <td><strong>Concurrency and Thread Safety</strong></td>
+    #       <td>Thread-safe container sharing, multi-fiber reads, and synchronized IO.</td>
+    #     </tr>
+    #   </tbody>
+    # </table>
+    #
     module Docs
       # **Quick-Start Commands**: Essential commands for building, running, and testing.
       #
@@ -110,6 +146,12 @@
       # ##### 4. Containers (`D_CONTAINERS`)
       # - `D_CONTAINERS::BINARY_CONTAINERS`: **Binary Containers and CLI Toolchain** &mdash; Post-compile executable overlay and standalone archive manipulation.
       #
+      # ##### 5. Scale (`E_SCALE`)
+      # - `E_SCALE::LARGE_ASSET_STREAMING`: **Large Asset Streaming and Scale (100MB & 1GB)** &mdash; Memory bounds, streaming architecture, and scale testing for massive assets.
+      #
+      # ##### 6. Concurrency (`F_CONCURRENCY`)
+      # - `F_CONCURRENCY::THREAD_SAFETY`: **Concurrency and Thread Safety** &mdash; Thread-safe container sharing, multi-fiber reads, and synchronized IO.
+      #
       def self.topic_02_reading_paths : Nil; end
 
       # **Master Table of Contents**: Complete hierarchical topic index.
@@ -127,6 +169,12 @@
       #
       # ##### `D_CONTAINERS`
       # - `D_CONTAINERS::BINARY_CONTAINERS`: **Binary Containers and CLI Toolchain** &mdash; Post-compile executable overlay and standalone archive manipulation.
+      #
+      # ##### `E_SCALE`
+      # - `E_SCALE::LARGE_ASSET_STREAMING`: **Large Asset Streaming and Scale (100MB & 1GB)** &mdash; Memory bounds, streaming architecture, and scale testing for massive assets.
+      #
+      # ##### `F_CONCURRENCY`
+      # - `F_CONCURRENCY::THREAD_SAFETY`: **Concurrency and Thread Safety** &mdash; Thread-safe container sharing, multi-fiber reads, and synchronized IO.
       #
       def self.topic_03_table_of_contents : Nil; end
 
@@ -151,6 +199,8 @@
   require "./docs/b_architecture/chunking_and_io"
   require "./docs/c_dsl/macros_and_volumes"
   require "./docs/d_containers/binary_containers"
+  require "./docs/e_scale/large_asset_streaming"
+  require "./docs/f_concurrency/thread_safety"
 
   alias Docs = ::Bakelite::Docs
 {% end %}

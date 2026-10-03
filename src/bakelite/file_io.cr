@@ -4,6 +4,51 @@ require "compress/zlib"
 require "./types"
 
 module Bakelite
+  # Thread-safe synchronized IO wrapper providing atomic seek-and-read operations
+  # for concurrent readers accessing the same container source.
+  class SynchronizedIO < IO
+    getter io : IO
+    getter mutex : ::Thread::Mutex
+
+    def initialize(@io : IO, @mutex : ::Thread::Mutex = ::Thread::Mutex.new)
+    end
+
+    def read(slice : Bytes) : Int32
+      @mutex.synchronize { @io.read(slice) }
+    end
+
+    def write(slice : Bytes) : Nil
+      @mutex.synchronize { @io.write(slice) }
+    end
+
+    def seek(offset : Int, whence : IO::Seek = IO::Seek::Set) : self
+      @mutex.synchronize { @io.seek(offset, whence) }
+      self
+    end
+
+    def pos : Int64
+      @mutex.synchronize { @io.pos.to_i64 }
+    end
+
+    # Atomically seeks to offset and reads exact slice
+    def read_at(offset : Int64, slice : Bytes) : Nil
+      @mutex.synchronize do
+        if @io.responds_to?(:seek)
+          @io.seek(offset, IO::Seek::Set)
+        end
+        @io.read_fully(slice)
+      end
+    end
+
+    def close : Nil
+      @mutex.synchronize { @io.close }
+    end
+
+    def closed? : Bool
+      @mutex.synchronize { @io.closed? }
+    end
+  end
+
   # High-performance, read-only streaming IO implementation for Bakelite stored assets.
   # Decompresses chunks on demand into a single active sliding buffer, ensuring peak
   # memory usage remains strictly O(chunk_size) regardless of file size.
@@ -153,11 +198,15 @@ module Bakelite
       end
 
       if io = @underlying_io
-        if io.responds_to?(:seek)
-          io.seek(chunk.offset, IO::Seek::Set)
-        end
         buffer = Bytes.new(chunk.compressed_size)
-        io.read_fully(buffer)
+        if io.is_a?(SynchronizedIO)
+          io.read_at(chunk.offset, buffer)
+        else
+          if io.responds_to?(:seek)
+            io.seek(chunk.offset, IO::Seek::Set)
+          end
+          io.read_fully(buffer)
+        end
         return buffer
       end
 

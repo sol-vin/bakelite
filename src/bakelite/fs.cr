@@ -179,21 +179,21 @@ module Bakelite
         normalized = Volume.normalize_path(path)
 
         @volumes.each do |vol|
-          mount_prefix = vol.mount_point
+          prefix = vol.mount_prefix_with_slash
 
-          if mount_prefix.empty?
+          if prefix.empty?
             # Root mount: direct match in volume
             if item = vol.get?(normalized)
               return item
             end
           else
             # Prefixed mount: check if path begins with mount prefix
-            if normalized == mount_prefix
+            if normalized == vol.mount_point
               if item = vol.get?("")
                 return item
               end
-            elsif normalized.starts_with?("#{mount_prefix}/")
-              sub_path = normalized[(mount_prefix.size + 1)..-1]
+            elsif normalized.starts_with?(prefix)
+              sub_path = normalized[prefix.size..-1]
               if item = vol.get?(sub_path)
                 return item
               end

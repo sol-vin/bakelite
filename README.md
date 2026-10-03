@@ -24,9 +24,16 @@ Bakelite provides zero-copy compile-time asset embedding alongside streaming-cap
 - **Compile-Time Content-Addressed Transforms**:
   - Run built-in transformations (`:crlf_to_lf`, `:minify_json`, `:strip_comments`, `:trim`) or external CLI pipelines at compile time.
   - Results are cached by SHA-256 hash in `.bakelite/cache` to prevent redundant rebuild overhead.
+- **Large-Scale Streaming (100MB & 1GB Tested)**:
+  - Verified with 100MB and 1GB scale suites: streaming 16,384 chunks with 64-bit offsets and bit-perfect CRC32 verification.
+  - Compile-time size guard on `bake` warns developers when an inlined file exceeds 10MB, suggesting `store` to prevent binary executable bloat.
+- **Thread Safety & Multi-Fiber Concurrency (`Bakelite::SynchronizedIO`)**:
+  - Container-level mutex synchronization guarantees race-free, atomic seek-and-read operations across concurrent fibers and OS background threads.
 - **Post-Compile Executable Overlay Container**:
   - Pack assets into `.bkl` standalone archives or append them directly onto compiled executables (PE, ELF, Mach-O).
   - 32-byte fixed EOF trailer allows executables to inspect and mount their own embedded payload at runtime via `mount_self!`.
+- **Hardened Validation & Error Handling**:
+  - Typed exceptions (`Bakelite::Error`, `CorruptContainerError`, `InvalidTrailerError`, `ChecksumMismatchError`) with exact offsets and diagnostics.
 - **Ecosystem Integration**:
   - Versioning powered by `sol-vin/carbon`.
   - ANSI TUI tables and CLI styling powered by `sol-vin/opal`.

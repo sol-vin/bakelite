@@ -69,6 +69,12 @@ when "process_file"
   total_crc32 = Digest::CRC32.checksum(final_bytes)
 
   if storage_mode == "bake"
+    # Emit compile-time warning if baked file exceeds 10MB threshold
+    if total_size > 10_485_760
+      mb_str = sprintf("%.2f MB", total_size / (1024.0 * 1024.0))
+      STDERR.puts "\e[33m[Bakelite Warning]\e[0m File '#{file_path}' is #{mb_str}. Inlining large files via 'bake' bloats executable binary. Consider using 'store' for chunked streaming storage."
+    end
+
     puts "META|bake|#{total_size}|#{total_size}|#{total_crc32}|none|#{chunk_size}"
     puts "DATA|#{Base64.strict_encode(final_bytes)}"
     puts "END"

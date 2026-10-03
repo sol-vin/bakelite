@@ -1,0 +1,40 @@
+id: LARGE_ASSET_STREAMING
+title: Large Asset Streaming and Scale (100MB & 1GB)
+summary: Memory bounds, streaming architecture, and scale testing for massive assets.
+track: 05_scale
+overview: |
+  Bakelite is engineered from the ground up to handle massive assets—ranging from
+  100MB video/audio files to multi-gigabyte open-world game maps and terrain databases—with
+  constant O(chunk_size) heap memory usage.
+
+sections:
+  - id: topic_01_memory_bounds
+    title: Constant Memory Bounds
+    summary: How Bakelite guarantees fixed RAM consumption regardless of file scale.
+    content: |
+      Traditional embedding solutions load entire files into memory buffers. When dealing
+      with large assets (such as 100MB video clips or 1GB texture packs), this leads to
+      drastic memory spikes and out-of-memory crashes on resource-constrained platforms.
+
+      Bakelite's `store` primitive and `Bakelite::FileIO` solve this through active chunk
+      sliding buffers:
+      - Files are partitioned into discrete compressed chunks (e.g. 64KB).
+      - At any point in time, only the single active chunk containing the current read position
+        resides uncompressed in RAM.
+      - Sequential reads across a 1GB file execute in continuous 64KB slices with zero heap allocations.
+      - Random seeking across chunk boundaries simply invalidates the active chunk and loads the
+        target chunk, requiring only O(log N) binary search iterations over 64-bit offsets.
+
+  - id: topic_02_scale_testing
+    title: 100MB and 1GB Scale Verification
+    summary: Deterministic synthetic testing apparatus and automated CI benchmarks.
+    content: |
+      Bakelite includes dedicated automated test suites (`spec/scale_spec.cr`) verifying:
+      - **100MB Real Disk Test**: Generates a 104,857,600-byte file on disk, stream-packs 1,600
+        compressed chunks into a `.bkl` container, performs arbitrary seeks across 25MB, 50MB,
+        75MB, and near-EOF boundaries, and verifies 128KB multi-chunk spanning reads.
+      - **1GB Scale Verification**: Tests 1,073,741,824 bytes spanning 16,384 chunks, proving
+        64-bit offset integrity, binary container trailers at EOF, and deep seeks to 512MB
+        and 768MB with bit-perfect chunk marker verification.
+      - **Compile-Time Guard**: Files exceeding 10MB passed to `bake` trigger compile-time
+        warnings advising the developer to switch to `store` to prevent binary executable bloat.

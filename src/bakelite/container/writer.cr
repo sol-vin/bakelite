@@ -57,26 +57,29 @@ module Bakelite
           end
           next if excluded
 
-          raw_bytes = File.read(file_match).to_slice
-          file_crc = Digest::CRC32.checksum(raw_bytes)
+          file_size = File.size(file_match)
+          chunks = [] of Chunk
+          running_crc = 0_u32
 
-          # Slice into chunks and compress
-          chunks = Chunker.chunk_data(
-            data: raw_bytes,
-            chunk_size: chunk_size,
-            compression: compression
-          )
+          File.open(file_match, "rb") do |file_io|
+            chunks, running_crc = Chunker.chunk_stream(
+              io: file_io,
+              total_size: file_size,
+              chunk_size: chunk_size,
+              compression: compression
+            )
+          end
 
           total_comp = chunks.sum(&.compressed_size.to_i64)
 
           item = StoredItem.new(
             path: rel,
             volume_name: volume_name,
-            size: raw_bytes.size.to_i64,
+            size: file_size,
             compressed_size: total_comp,
             chunks: chunks,
             compression: compression,
-            crc32: file_crc
+            crc32: running_crc
           )
 
           vol.add(item)
@@ -84,6 +87,72 @@ module Bakelite
 
         add_volume(vol)
         self
+      end
+
+      # Streams and packs an arbitrary IO stream into a named volume.
+      def pack_stream(
+        io : IO,
+        size : Int64,
+        virtual_path : String,
+        volume_name : Symbol | String = :root,
+        mount_point : String = "",
+        priority : Int32 = 0,
+        chunk_size : UInt32 = 65536_u32,
+        compression : CompressionType = CompressionType::Deflate,
+      ) : self
+        vol = find_or_create_volume(
+          name: volume_name,
+          mount_point: mount_point,
+          priority: priority,
+          default_chunk_size: chunk_size,
+          default_compression: compression
+        )
+
+        chunks, running_crc = Chunker.chunk_stream(
+          io: io,
+          total_size: size,
+          chunk_size: chunk_size,
+          compression: compression
+        )
+
+        total_comp = chunks.sum(&.compressed_size.to_i64)
+
+        item = StoredItem.new(
+          path: virtual_path,
+          volume_name: volume_name,
+          size: size,
+          compressed_size: total_comp,
+          chunks: chunks,
+          compression: compression,
+          crc32: running_crc
+        )
+
+        vol.add(item)
+        self
+      end
+
+      # Finds an existing volume by name or creates and mounts a new one.
+      def find_or_create_volume(
+        name : Symbol | String,
+        mount_point : String = "",
+        priority : Int32 = 0,
+        default_chunk_size : UInt32 = 65536_u32,
+        default_compression : CompressionType = CompressionType::Deflate,
+      ) : Volume
+        key = name.to_s
+        if existing = @volumes.find { |v| v.name == key }
+          existing
+        else
+          vol = Volume.new(
+            name: key,
+            mount_point: mount_point,
+            priority: priority,
+            default_chunk_size: default_chunk_size,
+            default_compression: default_compression
+          )
+          add_volume(vol)
+          vol
+        end
       end
 
       # Executes the pack operation. Appends to target if it already exists, or creates it anew.

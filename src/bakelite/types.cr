@@ -79,4 +79,20 @@ module Bakelite
       @volume_name = volume_name.to_s
     end
   end
+
+  # Base exception for all Bakelite-specific errors.
+  class Error < Exception
+  end
+
+  # Raised when attempting to parse or access a corrupted container.
+  class CorruptContainerError < Error
+  end
+
+  # Raised when the 32-byte trailer at the end of a container is missing or invalid.
+  class InvalidTrailerError < Error
+  end
+
+  # Raised when a CRC32 verification fails.
+  class ChecksumMismatchError < Error
+  end
 end

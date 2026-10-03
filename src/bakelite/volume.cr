@@ -8,7 +8,8 @@ module Bakelite
   # Volumes manage their own file registry, mount prefix, priority, and default storage policies.
   class Volume
     getter name : String
-    property mount_point : String
+    getter mount_point : String
+    getter mount_prefix_with_slash : String
     property priority : Int32
     property default_chunk_size : UInt32
     property default_compression : CompressionType
@@ -23,7 +24,13 @@ module Bakelite
     )
       @name = name.to_s
       @mount_point = self.class.normalize_path(mount_point)
+      @mount_prefix_with_slash = @mount_point.empty? ? "" : "#{@mount_point}/"
       @items = Hash(String, Item).new
+    end
+
+    def mount_point=(new_mount : String)
+      @mount_point = self.class.normalize_path(new_mount)
+      @mount_prefix_with_slash = @mount_point.empty? ? "" : "#{@mount_point}/"
     end
 
     # Registers an item into this volume.

@@ -1,0 +1,30 @@
+id: THREAD_SAFETY
+title: Concurrency and Thread Safety
+summary: Thread-safe container sharing, multi-fiber reads, and synchronized IO.
+track: 06_concurrency
+overview: |
+  In modern games and web servers, multiple fibers or background OS threads frequently
+  query virtual assets concurrently. Bakelite provides robust concurrency protections
+  ensuring safe, race-free operation.
+
+sections:
+  - id: topic_01_synchronized_io
+    title: Synchronized Container IO
+    summary: Atomic seek-and-read protection for shared container file handles.
+    content: |
+      When a `.bkl` container or executable overlay is mounted at runtime via `Container::Reader`,
+      the underlying container file is wrapped in `Bakelite::SynchronizedIO`.
+
+      `SynchronizedIO` protects all file pointer seeking and chunk extraction through an internal
+      `Thread::Mutex`. When multiple concurrent fibers open different (or identical) files within
+      the container, each chunk read executes atomically via `read_at(offset, slice)`.
+
+  - id: topic_02_concurrent_fiber_reads
+    title: Multi-Fiber Parallel Execution
+    summary: Concurrency patterns verified by automated test suites.
+    content: |
+      The Bakelite concurrency test suite (`spec/concurrency_spec.cr`) stress-tests 30
+      concurrent fibers simultaneously seeking and streaming from the same container:
+      - Fibers can seek to arbitrary positions simultaneously without corrupting neighbor streams.
+      - Each `FileIO` maintains its own independent sliding active chunk and position pointer.
+      - Clean resource release upon stream closure.

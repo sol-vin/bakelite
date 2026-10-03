@@ -39,23 +39,24 @@ module Bakelite
       def read : Array(Volume)
         return @volumes unless @volumes.empty?
 
-        raise "File not found: #{@target_path}" unless File.exists?(@target_path)
+        raise File::NotFoundError.new("File not found", file: @target_path) unless File.exists?(@target_path)
         file_size = File.size(@target_path)
-        raise "File too small to contain Bakelite trailer" if file_size < TRAILER_SIZE
+        raise InvalidTrailerError.new("File too small to contain Bakelite trailer: #{file_size} bytes") if file_size < TRAILER_SIZE
 
-        # Open file in read-only binary mode for reading index and streaming chunks
-        io = File.open(@target_path, "rb")
+        # Open file in read-only binary mode and wrap in SynchronizedIO for thread safety
+        raw_io = File.open(@target_path, "rb")
+        io = SynchronizedIO.new(raw_io)
 
         # 1. Read Trailer
         io.seek(file_size - TRAILER_SIZE, IO::Seek::Set)
-        trailer = Trailer.read(io) || raise "Invalid or corrupt Bakelite trailer in #{@target_path}"
+        trailer = Trailer.read(io) || raise InvalidTrailerError.new("Invalid or corrupt Bakelite trailer in #{@target_path}")
         @trailer = trailer
 
         # 2. Seek to Volume Header and Read Volume Table
         io.seek(trailer.volume_start_offset.to_i64, IO::Seek::Set)
         magic_buf = Bytes.new(8)
         io.read_fully(magic_buf)
-        raise "Invalid Bakelite volume header" unless String.new(magic_buf) == MAGIC_HEADER
+        raise CorruptContainerError.new("Invalid Bakelite volume header magic in #{@target_path}") unless String.new(magic_buf) == MAGIC_HEADER
 
         _ver = io.read_bytes(UInt16, BYTE_FORMAT)
         vol_count = io.read_bytes(UInt16, BYTE_FORMAT)
