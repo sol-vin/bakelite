@@ -1,7 +1,15 @@
 require "./spec_helper"
 
 describe "Bakelite: CLI Tool Commands" do
-  cli_exe = Path.new("bin/bakelite.exe").expand
+  cli_exe = {% if flag?(:windows) %}
+              Path.new("bin/bakelite.exe").expand
+            {% else %}
+              Path.new("bin/bakelite").expand
+            {% end %}
+
+  unless File.exists?(cli_exe)
+    Process.run("shards", ["build", "bakelite"], shell: true)
+  end
 
   it "packs, inspects, lists, verifies, and extracts via CLI" do
     temp_dir = BakeliteSpecHelper.temp_dir
