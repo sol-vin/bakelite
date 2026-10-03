@@ -57,22 +57,27 @@ module CompileHelper
       end
     end
 
-    # Scan directory tree using forward slashes
-    if norm_base.empty? || norm_base == "." || Dir.exists?(norm_base)
-      globs = if norm_base.empty? || norm_base == "."
-                ["*", "**/*"]
-              else
-                ["#{norm_base}/*", "#{norm_base}/**/*"]
-              end
+    # Scan only specific pattern globs
+    patterns.each do |pat|
+      next if pat.starts_with?('!')
+      clean_pat = pat.tr("\\", "/").strip('/')
 
-      Dir.glob(globs).each do |match|
-        next unless File.file?(match)
-        rel = if norm_base.empty? || norm_base == "."
-                match.tr("\\", "/").strip('/')
-              else
-                Path.new(match).relative_to(Path.new(norm_base)).to_s.tr("\\", "/").strip('/')
-              end
-        candidates << rel
+      if clean_pat.includes?('*') || clean_pat.includes?('?')
+        glob_target = norm_base.empty? || norm_base == "." ? clean_pat : "#{norm_base}/#{clean_pat}"
+        globs_to_run = [glob_target]
+        if clean_pat.ends_with?("**/*")
+          globs_to_run << glob_target.sub(/\*\*\/\*$/, "**/.*")
+        end
+
+        Dir.glob(globs_to_run).each do |match|
+          next unless File.file?(match)
+          rel = if norm_base.empty? || norm_base == "."
+                  match.tr("\\", "/").strip('/')
+                else
+                  Path.new(match).relative_to(Path.new(norm_base)).to_s.tr("\\", "/").strip('/')
+                end
+          candidates << rel
+        end
       end
     end
 

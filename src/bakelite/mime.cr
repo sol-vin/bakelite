@@ -16,6 +16,10 @@ module Bakelite
       "xml"  => "application/xml",
       "md"   => "text/markdown; charset=utf-8",
       "csv"  => "text/csv; charset=utf-8",
+      "cr"   => "text/x-crystal; charset=utf-8",
+      "cpp"  => "text/x-c++src; charset=utf-8",
+      "hpp"  => "text/x-c++hdr; charset=utf-8",
+      "h"    => "text/x-chdr; charset=utf-8",
 
       # Images & Vectors
       "png"  => "image/png",

@@ -49,8 +49,8 @@ module Bakelite
       return true if norm_pattern == "**" || norm_pattern == "**/*"
       return true if path == norm_pattern
 
-      # If pattern doesn't contain a slash, match against basename as well (e.g. "*.uid" matches "a/b/c.uid")
-      if !norm_pattern.includes?('/') && File.match?(norm_pattern, File.basename(path))
+      # If pattern doesn't contain a slash and contains wildcards, match against basename as well (e.g. "*.uid" matches "a/b/c.uid")
+      if !norm_pattern.includes?('/') && (norm_pattern.includes?('*') || norm_pattern.includes?('?')) && File.match?(norm_pattern, File.basename(path))
         return true
       end
 
@@ -58,20 +58,30 @@ module Bakelite
       return true if File.match?(norm_pattern, path)
 
       # Recursive wildcard matching (e.g. "dir/**" or "dir/**/*")
-      if norm_pattern.ends_with?("/**")
-        prefix = norm_pattern.rchop("/**")
-        return true if path == prefix || path.starts_with?("#{prefix}/") || path.includes?("/#{prefix}/") || path.ends_with?("/#{prefix}")
-      elsif norm_pattern.ends_with?("/**/*")
-        prefix = norm_pattern.rchop("/**/*")
-        return true if path == prefix || path.starts_with?("#{prefix}/") || path.includes?("/#{prefix}/") || path.ends_with?("/#{prefix}")
+      if norm_pattern.ends_with?("/**") || norm_pattern.ends_with?("/**/*")
+        prefix = norm_pattern.ends_with?("/**/*") ? norm_pattern.rchop("/**/*") : norm_pattern.rchop("/**")
+        if prefix.starts_with?("**/")
+          inner_prefix = prefix.lchop("**/")
+          return true if path == inner_prefix || path.starts_with?("#{inner_prefix}/") || path.includes?("/#{inner_prefix}/") || path.ends_with?("/#{inner_prefix}")
+        else
+          return true if path == prefix || path.starts_with?("#{prefix}/")
+        end
       elsif norm_pattern.ends_with?("/*")
         prefix = norm_pattern.rchop("/*")
-        if path.starts_with?("#{prefix}/")
-          sub = path[(prefix.size + 1)..-1]
-          return !sub.includes?('/')
-        elsif path.includes?("/#{prefix}/")
-          sub = path.split("/#{prefix}/", 2)[1]
-          return !sub.includes?('/')
+        if prefix.starts_with?("**/")
+          inner_prefix = prefix.lchop("**/")
+          if path.starts_with?("#{inner_prefix}/")
+            sub = path[(inner_prefix.size + 1)..-1]
+            return !sub.includes?('/')
+          elsif path.includes?("/#{inner_prefix}/")
+            sub = path.split("/#{inner_prefix}/", 2)[1]
+            return !sub.includes?('/')
+          end
+        else
+          if path.starts_with?("#{prefix}/")
+            sub = path[(prefix.size + 1)..-1]
+            return !sub.includes?('/')
+          end
         end
       end
 
