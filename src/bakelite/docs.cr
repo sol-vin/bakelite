@@ -202,5 +202,4 @@
   require "./docs/e_scale/large_asset_streaming"
   require "./docs/f_concurrency/thread_safety"
 
-  alias Docs = ::Bakelite::Docs
 {% end %}
