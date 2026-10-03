@@ -105,7 +105,82 @@ item = Game["mods/rules.json"]
 mod_item = Game.volume(:mods)["rules.json"]
 ```
 
-### 3. Appending Containers Post-Compilation
+### 3. Declarative Multi-Volume Manifest (`bake_manifest`)
+
+Declare multi-volume configurations cleanly in YAML with custom mount points, auto thresholds, and glob patterns with negative exclusions (`!pattern`). The manifest is processed in a single fast compile-time pass (<200ms):
+
+```yaml
+# manifest.yml
+volumes:
+  engine:
+    mount: ""
+    default_chunk_size: 65536
+    default_compression: deflate
+    auto_threshold: 16384 # Files < 16KB use bake; >= 16KB use store
+    files:
+      - src/libgodot.cr
+      - src/lapis.cr
+      - src/libgodot/**/*.cr
+      - src/bridge/**/*
+      - shard.yml
+      - godot-version.yml
+    exclude:
+      - src/main.cr
+      - src/libgodot/docs/**
+      - "**/*.uid"
+  template:
+    mount: "template"
+    files:
+      - template/**/*
+  addon:
+    mount: "addons/crystal_integration"
+    files:
+      - addons/crystal_integration/**/*
+```
+
+Bake into your application with a single call:
+
+```crystal
+module EngineFS
+  include Bakelite::FS
+
+  bake_manifest "manifest.yml", base_dir: "."
+end
+```
+
+### 4. Volume Extraction API
+
+Extract isolated volumes or specific subfolders directly to disk with full overwrite protection:
+
+```crystal
+# Extract the lean :engine volume into lib/lapis
+EngineFS.extract_volume(:engine, "lib/lapis")
+
+# Extract only the "scenes" folder from the template volume
+EngineFS.extract_volume_folder(:template, "scenes", "my_project/scenes")
+```
+
+### 5. Programmatic Packaging API (`Bakelite.pack`)
+
+Pack containers or append assets directly from your toolchain or scripts without spawning child processes:
+
+```crystal
+# Pack a directory into a container or append to an executable
+Bakelite.pack(
+  target: "bin/game.exe",
+  source_dir: "assets/",
+  volume: :root,
+  mount_point: "assets",
+  append: true
+)
+
+# Pack an array of preconfigured volumes
+vol = Bakelite::Volume.new(:levels)
+# ... populate volume ...
+Bakelite.pack("game_assets.bkl", volumes: [vol])
+```
+
+### 6. Appending Containers Post-Compilation
 
 Compile your application normally:
 

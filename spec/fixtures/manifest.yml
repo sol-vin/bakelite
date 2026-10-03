@@ -1,0 +1,25 @@
+volumes:
+  engine:
+    mount: ""
+    default_chunk_size: 65536
+    default_compression: deflate
+    auto_threshold: 16384
+    files:
+      - src/libgodot.cr
+      - src/lapis.cr
+      - src/libgodot/**/*.cr
+      - src/bridge/**/*
+      - shard.yml
+      - godot-version.yml
+    exclude:
+      - src/main.cr
+      - src/libgodot/docs/**
+      - "**/*.uid"
+  template:
+    mount: "template"
+    files:
+      - template/**/*
+  addon:
+    mount: "addons/crystal_integration"
+    files:
+      - addons/crystal_integration/**/*

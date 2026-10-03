@@ -115,6 +115,14 @@ module Bakelite
       def self.extract_folder(prefix : String, destination_dir : Path | String, overwrite : Bool = true) : Int32
         @@fs_instance.extract_folder(prefix, destination_dir, overwrite)
       end
+
+      def self.extract_volume(name : Symbol | String, destination_dir : Path | String, overwrite : Bool = true) : Int32
+        @@fs_instance.extract_volume(name, destination_dir, overwrite)
+      end
+
+      def self.extract_volume_folder(name : Symbol | String, prefix : String, destination_dir : Path | String, overwrite : Bool = true) : Int32
+        @@fs_instance.extract_volume_folder(name, prefix, destination_dir, overwrite)
+      end
     end
 
     # Concrete registry implementation managing volumes and union routing
@@ -365,10 +373,31 @@ module Bakelite
         count
       end
 
+      # Extracts all files from a specific volume into destination_dir on disk.
+      def extract_volume(name : Symbol | String, destination_dir : Path | String, overwrite : Bool = true) : Int32
+        vol = volume?(name) || return 0
+        vol.extract(destination_dir, overwrite: overwrite)
+      end
+
+      # Extracts a specific subfolder from a specific volume into destination_dir on disk.
+      def extract_volume_folder(name : Symbol | String, prefix : String, destination_dir : Path | String, overwrite : Bool = true) : Int32
+        vol = volume?(name) || return 0
+        vol.extract_folder(prefix, destination_dir, overwrite: overwrite)
+      end
+
       private def sort_volumes! : Nil
         # Sort volumes descending by priority (highest priority first)
         @volumes.sort_by! { |v| -v.priority }
       end
+    end
+
+    # Module-level helpers delegating to top-level Bakelite.fs
+    def self.extract_volume(name : Symbol | String, destination_dir : Path | String, overwrite : Bool = true) : Int32
+      ::Bakelite.fs.extract_volume(name, destination_dir, overwrite)
+    end
+
+    def self.extract_volume_folder(name : Symbol | String, prefix : String, destination_dir : Path | String, overwrite : Bool = true) : Int32
+      ::Bakelite.fs.extract_volume_folder(name, prefix, destination_dir, overwrite)
     end
   end
 end

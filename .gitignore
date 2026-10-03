@@ -6,7 +6,6 @@
 /bin/*.dll
 /.crystal/
 /lib/
-/shard.lock
 
 # Test artifacts
 /tmp/
