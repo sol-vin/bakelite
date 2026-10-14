@@ -1,5 +1,5 @@
 name: bakelite
-version: 0.1.7
+version: 0.1.9
 authors:
   - Ian / Sol-Vin <contact@solvin.dev>
 
@@ -21,6 +21,10 @@ dependencies:
     github: sol-vin/jasper
   carbon:
     github: sol-vin/carbon
+
+development_dependencies:
+  crowbar:
+    github: sol-vin/crowbar
 
 targets:
   bakelite:

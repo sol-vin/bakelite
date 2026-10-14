@@ -123,6 +123,82 @@ module Bakelite
       def self.extract_volume_folder(name : Symbol | String, prefix : String, destination_dir : Path | String, overwrite : Bool = true) : Int32
         @@fs_instance.extract_volume_folder(name, prefix, destination_dir, overwrite)
       end
+
+      def self.content_manifest : Hash(String, String)
+        self.fs.content_manifest
+      end
+
+      def self.manifest_sha256 : String
+        self.fs.manifest_sha256
+      end
+
+      def self.find_by_sha256(digest : String) : ::Bakelite::Item?
+        self.fs.find_by_sha256(digest)
+      end
+
+      def self.get_by_sha256?(digest : String) : ::Bakelite::Item?
+        self.fs.get_by_sha256?(digest)
+      end
+
+      def self.get_by_sha256(digest : String) : ::Bakelite::Item
+        self.fs.get_by_sha256(digest)
+      end
+
+      def self.find_all_by_sha256(digest : String) : Array(::Bakelite::Item)
+        self.fs.find_all_by_sha256(digest)
+      end
+
+      def self.has_sha256?(digest : String) : Bool
+        self.fs.has_sha256?(digest)
+      end
+
+      def self.verify_archive(
+        target : ::Bakelite::DSL::VerificationTarget? = nil,
+        raise_on_error : Bool = false,
+        expected_digests : Hash(String, String)? = nil,
+        expected_manifest_sha256 : String? = nil,
+        strict : Bool = false,
+      ) : ::Bakelite::Core::VerificationReport
+        effective = target || self.fs
+        verifier = ::Bakelite::Core::IntegrityVerifier.new(strict_manifest: strict)
+        verifier.expect_manifest(expected_digests, strict: strict) if expected_digests
+        verifier.expect_manifest_sha256(expected_manifest_sha256) if expected_manifest_sha256
+        report = verifier.verify(effective)
+        report.assert_valid! if raise_on_error
+        report
+      end
+
+      def self.verify_archive(
+        target : ::Bakelite::DSL::VerificationTarget? = nil,
+        raise_on_error : Bool = false,
+        &
+      ) : ::Bakelite::Core::VerificationReport
+        effective = target || self.fs
+        builder = ::Bakelite::DSL::VerifyArchiveBuilder.new(effective, raise_on_error: raise_on_error)
+        with builder yield builder
+        builder.run
+      end
+
+      def self.verify_archive!(
+        target : ::Bakelite::DSL::VerificationTarget? = nil,
+        expected_digests : Hash(String, String)? = nil,
+        expected_manifest_sha256 : String? = nil,
+        strict : Bool = false,
+      ) : ::Bakelite::Core::VerificationReport
+        verify_archive(
+          target,
+          raise_on_error: true,
+          expected_digests: expected_digests,
+          expected_manifest_sha256: expected_manifest_sha256,
+          strict: strict
+        )
+      end
+
+      def self.verify_archive!(target : ::Bakelite::DSL::VerificationTarget? = nil, &) : ::Bakelite::Core::VerificationReport
+        verify_archive(target, raise_on_error: true) do |v|
+          with v yield v
+        end
+      end
     end
 
     # Concrete registry implementation managing volumes and union routing
@@ -276,6 +352,83 @@ module Bakelite
         end
       end
 
+      # Returns a deterministically sorted map of visible union virtual paths to SHA-256 hex digests.
+      def content_manifest : Hash(String, String)
+        visible = visible_items_by_path
+        manifest = Hash(String, String).new(initial_capacity: visible.size)
+        visible.keys.sort.each do |v_path|
+          manifest[v_path] = visible[v_path].sha256
+        end
+        manifest
+      end
+
+      # Computes a deterministic SHA-256 manifest digest over all visible union files in this registry.
+      def manifest_sha256 : String
+        visible = visible_items_by_path
+        hasher = Digest::SHA256.new
+        hasher << "bakelite-manifest-v1\n"
+        visible.keys.sort.each do |v_path|
+          item = visible[v_path]
+          hasher << v_path
+          hasher << "\0"
+          hasher << item.size.to_s
+          hasher << "\0"
+          hasher << item.crc32_hex
+          hasher << "\0"
+          hasher << item.sha256
+          hasher << "\n"
+        end
+        hasher.hexfinal
+      end
+
+      # Alias for manifest_sha256.
+      def sha256 : String
+        manifest_sha256
+      end
+
+      # Canonical content address URI for this registry's manifest ("sha256:<hex>").
+      def content_address : String
+        "sha256:#{manifest_sha256}"
+      end
+
+      # Finds the first visible item (in deterministic virtual path order) matching a SHA-256 content address.
+      def find_by_sha256(digest : String) : Item?
+        norm = Item.normalize_sha256(digest)
+        visible = visible_items_by_path
+        visible.keys.sort.each do |v_path|
+          item = visible[v_path]
+          return item if item.sha256 == norm
+        end
+        nil
+      end
+
+      # Alias for find_by_sha256.
+      def get_by_sha256?(digest : String) : Item?
+        find_by_sha256(digest)
+      end
+
+      # Fetches a visible item by its SHA-256 content address, raising KeyError if not found.
+      def get_by_sha256(digest : String) : Item
+        find_by_sha256(digest) || raise KeyError.new("Content address '#{digest}' not found in any mounted Bakelite volume")
+      end
+
+      # Finds all visible items matching a SHA-256 content address (in deterministic virtual path order).
+      def find_all_by_sha256(digest : String) : Array(Item)
+        norm = Item.normalize_sha256(digest)
+        visible = visible_items_by_path
+        matched = [] of Item
+        visible.keys.sort.each do |v_path|
+          item = visible[v_path]
+          matched << item if item.sha256 == norm
+        end
+        matched
+      end
+
+      # Checks whether a visible item with the given SHA-256 content address exists in this registry.
+      def has_sha256?(digest : String) : Bool
+        !find_by_sha256(digest).nil?
+      end
+
       # Matches all visible files using glob patterns.
       def glob(pattern : String, &block : Item ->) : Nil
         norm_pattern = pattern.tr("\\", "/")
@@ -383,6 +536,23 @@ module Bakelite
       def extract_volume_folder(name : Symbol | String, prefix : String, destination_dir : Path | String, overwrite : Bool = true) : Int32
         vol = volume?(name) || return 0
         vol.extract_folder(prefix, destination_dir, overwrite: overwrite)
+      end
+
+      # Maps visible normalized virtual paths to their active Item in priority order
+      protected def visible_items_by_path : Hash(String, Item)
+        visible = Hash(String, Item).new
+        @volumes.each do |vol|
+          vol.items.keys.sort.each do |rel_path|
+            item = vol.items[rel_path]
+            full_path = if vol.mount_point.empty?
+                          Volume.normalize_path(rel_path)
+                        else
+                          "#{vol.mount_point}/#{Volume.normalize_path(rel_path)}".strip('/')
+                        end
+            visible[full_path] = item unless visible.has_key?(full_path)
+          end
+        end
+        visible
       end
 
       private def sort_volumes! : Nil

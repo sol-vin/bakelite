@@ -14,6 +14,8 @@ require "./bakelite/transform/builtins"
 require "./bakelite/transform/cache"
 require "./bakelite/transform/runner"
 require "./bakelite/dsl"
+require "./bakelite/core/integrity_verifier"
+require "./bakelite/dsl/verify_archive_builder"
 
 module Bakelite
   include Bakelite::FS
@@ -70,6 +72,20 @@ module Bakelite
     writer = Container::Writer.new(target)
     volumes.each { |v| writer.add_volume(v) }
     writer.write(append: append)
+  end
+
+  # Packs an array of preconfigured volumes into an in-memory .bkl container byte slice.
+  def self.pack_to_slice(volumes : Array(Volume)) : Bytes
+    writer = Container::Writer.new("<memory>")
+    volumes.each { |v| writer.add_volume(v) }
+    writer.to_slice
+  end
+
+  # Constructs a configured Core::IntegrityVerifier without immediately executing it.
+  def self.define_archive_verifier(&) : Core::IntegrityVerifier
+    builder = DSL::VerifyArchiveBuilder.new
+    with builder yield builder
+    builder.build
   end
 end
 

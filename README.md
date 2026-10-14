@@ -203,8 +203,36 @@ Bakelite.mount_self!
 
 # All assets are now available transparently!
 if item = Bakelite.get?("assets/textures/player.png")
-  puts "Found asset: #{item.size} bytes"
+  puts "Found asset: #{item.size} bytes (SHA-256: #{item.sha256})"
 end
+```
+
+### 7. Deterministic SHA-256 Content Addressing & Archive Verification (`Bakelite.verify_archive`)
+
+Every virtual file, volume, and registry exposes deterministic SHA-256 content addressing alongside single-pass streaming integrity verification via `Bakelite.verify_archive`:
+
+```crystal
+# Inspect SHA-256 content addresses and deterministic volume manifest digests
+sha = EngineFS["src/lapis.cr"].sha256
+addr = EngineFS["src/lapis.cr"].content_address # => "sha256:<64-hex>"
+manifest_digest = EngineFS.volume(:engine).manifest_sha256
+
+# Look up virtual files by SHA-256 content address
+item = EngineFS.get_by_sha256(addr)
+
+# Declarative archive & virtual filesystem verification (Tier 2 DSL wrapping Core::IntegrityVerifier)
+report = Bakelite.verify_archive!("game_assets.bkl") do |v|
+  v.volume :levels
+  v.strict true
+  v.verify_chunks true
+  v.verify_crc32 true
+  v.verify_sha256 true
+  v.expect_sha256 "maps/level1.json", expected_level_sha256
+  v.expect_manifest_sha256 expected_manifest_sha256
+  v.require_files "maps/level1.json", "maps/level2.json"
+end
+
+puts "Verified #{report.verified_files} files (Manifest SHA-256: #{report.manifest_sha256})"
 ```
 
 ---
@@ -223,8 +251,8 @@ bakelite list <target>
 # Inspect container trailer, start offset, index metadata, and mounted volumes
 bakelite inspect <target>
 
-# Verify CRC32 checksums for every chunk in a container
-bakelite verify <target>
+# Verify CRC32 chunk checksums and deterministic SHA-256 manifest digests
+bakelite verify <target> [--sha256 DIGEST] [--volume NAME]
 
 # Extract all files or a specific volume to disk
 bakelite extract <target> <destination> [--volume NAME]
