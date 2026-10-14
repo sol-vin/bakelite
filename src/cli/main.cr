@@ -364,7 +364,6 @@ HELP
         output_dir: out_dir,
         master_file: master_file
       )
-      config.add_alias("Docs")
       config.set_quick_start("Bakelite Quick Start", [
         "shards install",
         "crystal spec",
@@ -372,6 +371,7 @@ HELP
       ])
 
       if Jasper::Generator.new(config).run
+        Process.run("crystal", ["tool", "format", master_file, out_dir])
         puts "\e[32m✓ Documentation compiled successfully!\e[0m"
       else
         puts "\e[33mNo YAML guide files found in #{src_dir} to compile.\e[0m"

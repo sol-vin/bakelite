@@ -8,7 +8,7 @@ describe "Bakelite: CLI Tool Commands" do
             {% end %}
 
   unless File.exists?(cli_exe)
-    Process.run("shards", ["build", "bakelite"], shell: true)
+    Process.run("shards", ["build", "bakelite"])
   end
 
   it "packs, inspects, lists, verifies, and extracts via CLI" do
