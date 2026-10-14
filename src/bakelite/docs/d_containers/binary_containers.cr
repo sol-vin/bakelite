@@ -35,6 +35,11 @@
         #       <td><code>.topic_02_cli_commands</code></td>
         #       <td>Managing containers from the command line.</td>
         #     </tr>
+        #     <tr>
+        #       <td><strong>Deterministic SHA-256 Content Addressing and Verification</strong></td>
+        #       <td><code>.topic_03_integrity_verification</code></td>
+        #       <td>Streaming SHA-256 manifest verification via Bakelite::Core::IntegrityVerifier and Bakelite.verify_archive.</td>
+        #     </tr>
         #   </tbody>
         # </table>
         #
@@ -55,12 +60,21 @@
           # * `bakelite pack <target> <dir> [--mount PATH] [--append]`: Packs files into an archive or appends to an executable.
           # * `bakelite list <target>`: Renders an interactive table of volumes and files using Opal.
           # * `bakelite inspect <target>`: Details container metadata, offsets, and trailer integrity.
-          # * `bakelite verify <target>`: Verifies CRC32 checksums for every chunk in the container.
+          # * `bakelite verify <target> [--sha256 DIGEST]`: Verifies CRC32 chunk checksums and deterministic SHA-256 manifest digests.
           # * `bakelite extract <target> <dest>`: Extracts all files or a specific volume to disk.
           # * `bakelite docs`: Compiles structured guides using Jasper.
           # * `bakelite version`: Displays version information managed by Carbon.
           #
           def self.topic_02_cli_commands : Nil; end
+
+          # **Deterministic SHA-256 Content Addressing and Verification**: Streaming SHA-256 manifest verification via Bakelite::Core::IntegrityVerifier and Bakelite.verify_archive.
+          #
+          # Bakelite provides deterministic SHA-256 content addressing across `Item`, `Volume`, and `FS::Registry` alongside
+          # the two-tier archive verification engine:
+          # 1. **Tier 1 (`Bakelite::Core::IntegrityVerifier`)**: Streams compressed chunks in $O(\text{chunk\_size})$ memory, validating container headers, index bounds, per-chunk CRC32 checksums, file-level CRC32s, SHA-256 content digests, and canonical `bakelite-manifest-v1` SHA-256 manifest signatures.
+          # 2. **Tier 2 (`Bakelite.verify_archive`)**: Declarative block DSL for asserting expected file SHA-256 digests, strict manifest policies, required files, and overall archive manifest signatures.
+          #
+          def self.topic_03_integrity_verification : Nil; end
         end
       end
     end

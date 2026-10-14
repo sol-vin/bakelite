@@ -168,32 +168,41 @@ module Bakelite
         File.open(@target_path, mode) do |io|
           volume_start_offset = io.size.to_u64
           io.seek(volume_start_offset.to_i64, IO::Seek::Set)
+          write_to_io(io, volume_start_offset)
+        end
+      end
 
-          # 1. Volume Header
-          io.write(MAGIC_HEADER.to_slice)
-          io.write_bytes(FORMAT_VERSION, BYTE_FORMAT)
-          io.write_bytes(@volumes.size.to_u16, BYTE_FORMAT)
+      # Serializes the container directly into an IO stream starting at volume_start_offset.
+      # Files within each volume are written in deterministic lexicographical path order.
+      def write_to_io(io : IO, volume_start_offset : UInt64 = 0_u64) : Int64
+        # 1. Volume Header
+        io.write(MAGIC_HEADER.to_slice)
+        io.write_bytes(FORMAT_VERSION, BYTE_FORMAT)
+        io.write_bytes(@volumes.size.to_u16, BYTE_FORMAT)
 
-          # Write volume descriptors
-          @volumes.each do |vol|
-            write_string(io, vol.name.to_s)
-            write_string(io, vol.mount_point)
-            io.write_bytes(vol.priority, BYTE_FORMAT)
-            io.write_bytes(vol.default_chunk_size, BYTE_FORMAT)
-            io.write_bytes(vol.default_compression.value, BYTE_FORMAT)
-          end
+        # Write volume descriptors
+        @volumes.each do |vol|
+          write_string(io, vol.name.to_s)
+          write_string(io, vol.mount_point)
+          io.write_bytes(vol.priority, BYTE_FORMAT)
+          io.write_bytes(vol.default_chunk_size, BYTE_FORMAT)
+          io.write_bytes(vol.default_compression.value, BYTE_FORMAT)
+        end
 
-          # 2. Sequential Chunk Payloads
-          # Record final relative offsets within volume
-          file_chunk_tables = Hash(Item, Array(Chunk)).new
+        # 2. Sequential Chunk Payloads (sorted deterministically by file path)
+        file_chunk_tables = Hash(Item, Array(Chunk)).new
 
-          @volumes.each do |vol|
-            vol.each_file do |item|
-              chunks = if item.is_a?(StoredItem)
-                         item.chunks
+        @volumes.each do |vol|
+          vol.items.keys.sort.each do |rel_key|
+            item = vol.items[rel_key]
+            chunks = if item.is_a?(StoredItem)
+                       item.chunks
+                     else
+                       # Convert baked item to a single chunk
+                       slice = item.to_slice
+                       if slice.empty?
+                         [] of Chunk
                        else
-                         # Convert baked item to a single chunk
-                         slice = item.to_slice
                          comp = Chunker.compress_slice(slice, vol.default_compression)
                          [Chunk.new(
                            offset: 0_i64,
@@ -203,75 +212,83 @@ module Bakelite
                            data: comp
                          )]
                        end
+                     end
 
-              final_chunks = [] of Chunk
-              chunks.each do |chunk|
-                chunk_offset_in_volume = (io.pos - volume_start_offset).to_i64
-                if chunk_bytes = chunk.data
-                  io.write(chunk_bytes)
-                else
-                  raise "Chunk data missing during container writing"
-                end
-
-                final_chunks << Chunk.new(
-                  offset: chunk_offset_in_volume,
-                  compressed_size: chunk.compressed_size,
-                  uncompressed_size: chunk.uncompressed_size,
-                  crc32: chunk.crc32
-                )
+            final_chunks = [] of Chunk
+            chunks.each do |chunk|
+              chunk_offset_in_volume = (io.pos - volume_start_offset).to_i64
+              if chunk_bytes = chunk.data
+                io.write(chunk_bytes)
+              else
+                raise "Chunk data missing during container writing"
               end
 
-              file_chunk_tables[item] = final_chunks
+              final_chunks << Chunk.new(
+                offset: chunk_offset_in_volume,
+                compressed_size: chunk.compressed_size,
+                uncompressed_size: chunk.uncompressed_size,
+                crc32: chunk.crc32
+              )
             end
+
+            file_chunk_tables[item] = final_chunks
           end
-
-          # 3. File Index
-          index_offset = (io.pos - volume_start_offset).to_u64
-
-          # Total file count across all volumes
-          total_files = @volumes.sum(&.size).to_u32
-          io.write_bytes(total_files, BYTE_FORMAT)
-
-          @volumes.each do |vol|
-            vol.each_file do |item|
-              chunks = file_chunk_tables[item]
-
-              write_string(io, item.path)
-              write_string(io, vol.name.to_s)
-              io.write_bytes(item.size.to_u64, BYTE_FORMAT)
-              io.write_bytes(item.compressed_size.to_u64, BYTE_FORMAT)
-              io.write_bytes(item.storage_mode.value, BYTE_FORMAT)
-              comp_val = item.is_a?(StoredItem) ? item.compression.value : vol.default_compression.value
-              io.write_bytes(comp_val, BYTE_FORMAT)
-              write_string(io, item.mime_type)
-              io.write_bytes(item.crc32, BYTE_FORMAT)
-
-              # Chunks table
-              io.write_bytes(chunks.size.to_u32, BYTE_FORMAT)
-              chunks.each do |chk|
-                io.write_bytes(chk.offset.to_u64, BYTE_FORMAT)
-                io.write_bytes(chk.compressed_size, BYTE_FORMAT)
-                io.write_bytes(chk.uncompressed_size, BYTE_FORMAT)
-                io.write_bytes(chk.crc32, BYTE_FORMAT)
-              end
-            end
-          end
-
-          index_size = (io.pos - (volume_start_offset + index_offset)).to_u64
-
-          # 4. 32-Byte Trailer at EOF
-          trailer = Trailer.new(
-            volume_start_offset: volume_start_offset,
-            index_offset: index_offset,
-            index_size: index_size,
-            version: FORMAT_VERSION,
-            magic: MAGIC_TRAILER
-          )
-          trailer.write(io)
-          io.flush
-
-          (io.pos - volume_start_offset).to_i64
         end
+
+        # 3. File Index (sorted deterministically by file path)
+        index_offset = (io.pos - volume_start_offset).to_u64
+
+        total_files = @volumes.sum(&.size).to_u32
+        io.write_bytes(total_files, BYTE_FORMAT)
+
+        @volumes.each do |vol|
+          vol.items.keys.sort.each do |rel_key|
+            item = vol.items[rel_key]
+            chunks = file_chunk_tables[item]
+            comp_total = chunks.sum(&.compressed_size.to_u64)
+
+            write_string(io, item.path)
+            write_string(io, vol.name.to_s)
+            io.write_bytes(item.size.to_u64, BYTE_FORMAT)
+            io.write_bytes(comp_total, BYTE_FORMAT)
+            io.write_bytes(item.storage_mode.value, BYTE_FORMAT)
+            comp_val = item.is_a?(StoredItem) ? item.compression.value : vol.default_compression.value
+            io.write_bytes(comp_val, BYTE_FORMAT)
+            write_string(io, item.mime_type)
+            io.write_bytes(item.crc32, BYTE_FORMAT)
+
+            # Chunks table
+            io.write_bytes(chunks.size.to_u32, BYTE_FORMAT)
+            chunks.each do |chk|
+              io.write_bytes(chk.offset.to_u64, BYTE_FORMAT)
+              io.write_bytes(chk.compressed_size, BYTE_FORMAT)
+              io.write_bytes(chk.uncompressed_size, BYTE_FORMAT)
+              io.write_bytes(chk.crc32, BYTE_FORMAT)
+            end
+          end
+        end
+
+        index_size = (io.pos - (volume_start_offset + index_offset)).to_u64
+
+        # 4. 32-Byte Trailer at EOF
+        trailer = Trailer.new(
+          volume_start_offset: volume_start_offset,
+          index_offset: index_offset,
+          index_size: index_size,
+          version: FORMAT_VERSION,
+          magic: MAGIC_TRAILER
+        )
+        trailer.write(io)
+        io.flush
+
+        (io.pos - volume_start_offset).to_i64
+      end
+
+      # Serializes the container into an in-memory byte slice.
+      def to_slice : Bytes
+        mem = IO::Memory.new
+        write_to_io(mem, 0_u64)
+        mem.to_slice
       end
 
       private def write_string(io : IO, str : String) : Nil

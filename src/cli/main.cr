@@ -242,57 +242,55 @@ HELP
     end
 
     private def self.run_verify(args : Array(String))
+      expected_manifest_sha : String? = nil
+      volume_filter : String? = nil
+
+      parser = OptionParser.new do |opts|
+        opts.banner = "Usage: bakelite verify <target> [--sha256 DIGEST] [--volume NAME]"
+        opts.on("--sha256 DIGEST", "Expected deterministic manifest SHA-256 digest") { |d| expected_manifest_sha = d }
+        opts.on("--volume NAME", "Verify only a specific volume") { |v| volume_filter = v }
+      end
+      parser.parse(args)
+
       target = args.first?
       unless target && File.exists?(target)
         STDERR.puts "\e[31mError:\e[0m Missing or invalid target file."
         exit 1
       end
 
-      reader = Container::Reader.new(target)
-      volumes = reader.read
+      report = Bakelite.verify_archive(target) do |v|
+        if vf = volume_filter
+          v.volume(vf)
+        end
+        if exp_sha = expected_manifest_sha
+          v.expect_manifest_sha256(exp_sha)
+        end
+      end
 
-      if volumes.empty?
+      if report.total_volumes == 0 && report.violations.any?(&.kind.corrupt_container?)
+        STDERR.puts "\e[31mError:\e[0m #{report.violations.first.message}"
+        exit 1
+      elsif report.total_volumes == 0
         STDERR.puts "\e[31mError:\e[0m No Bakelite volumes to verify."
         exit 1
       end
 
       puts "\e[1;36m=== Verifying Bakelite Integrity: #{target} ===\e[0m"
-      errors = 0
-      verified_files = 0
-
-      volumes.each do |vol|
-        vol.each_file do |item|
-          print "  Verifying #{item.path} [:#{vol.name}] ... "
-          computed_crc = 0_u32
-
-          begin
-            item.open do |stream|
-              running_crc = 0_u32
-              buffer = Bytes.new(65536)
-              while (read_bytes = stream.read(buffer)) > 0
-                running_crc = Digest::CRC32.update(buffer[0, read_bytes], running_crc)
-              end
-              computed_crc = running_crc
-            end
-
-            if computed_crc == item.crc32
-              puts "\e[32mOK\e[0m (CRC32: #{item.crc32_hex})"
-              verified_files += 1
-            else
-              puts "\e[31mFAILED\e[0m (Expected: #{item.crc32_hex}, Got: #{sprintf("%08x", computed_crc)})"
-              errors += 1
-            end
-          rescue ex
-            puts "\e[31mERROR: #{ex.message}\e[0m"
-            errors += 1
-          end
+      report.entries.each do |entry|
+        print "  Verifying #{entry.path} [:#{entry.volume_name}] ... "
+        if entry.valid?
+          puts "\e[32mOK\e[0m (CRC32: #{entry.crc32_hex}, SHA256: #{entry.sha256[0, 16]}...)"
+        else
+          puts "\e[31mFAILED\e[0m (#{entry.error_message || "Integrity check failed"})"
         end
       end
 
-      if errors == 0
-        puts "\e[1;32m✓ All #{verified_files} files verified successfully with zero errors!\e[0m"
+      puts "  \e[90mManifest SHA-256: #{report.manifest_sha256}\e[0m"
+
+      if report.valid?
+        puts "\e[1;32m✓ All #{report.verified_files} files verified successfully with zero errors!\e[0m"
       else
-        STDERR.puts "\e[1;31m✗ Verification failed with #{errors} error(s)!\e[0m"
+        STDERR.puts "\e[1;31m✗ Verification failed with #{report.errors_count} error(s)!\e[0m"
         exit 1
       end
     end

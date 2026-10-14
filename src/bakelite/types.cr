@@ -63,6 +63,7 @@ module Bakelite
     getter crc32 : UInt32
     getter chunk_size : UInt32
     getter chunks : Array(Chunk)
+    getter sha256 : String?
 
     def initialize(
       @path : String,
@@ -75,6 +76,7 @@ module Bakelite
       @crc32 : UInt32,
       @chunk_size : UInt32 = 65536_u32,
       @chunks : Array(Chunk) = [] of Chunk,
+      @sha256 : String? = nil,
     )
       @volume_name = volume_name.to_s
     end
@@ -92,7 +94,11 @@ module Bakelite
   class InvalidTrailerError < Error
   end
 
-  # Raised when a CRC32 verification fails.
+  # Raised when a CRC32 or SHA-256 verification fails.
   class ChecksumMismatchError < Error
+  end
+
+  # Raised when archive or virtual filesystem integrity verification fails.
+  class IntegrityError < ChecksumMismatchError
   end
 end

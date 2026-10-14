@@ -1,6 +1,7 @@
 require "file_utils"
 require "path"
 require "digest/crc32"
+require "digest/sha256"
 require "./types"
 require "./file_io"
 require "./mime"
@@ -15,6 +16,7 @@ module Bakelite
     getter mime_type : String
     getter crc32 : UInt32
     getter storage_mode : StorageMode
+    @sha256 : String?
 
     def initialize(
       @path : String,
@@ -24,8 +26,21 @@ module Bakelite
       @mime_type : String,
       @crc32 : UInt32,
       @storage_mode : StorageMode,
+      sha256 : String? = nil,
     )
       @volume_name = volume_name.to_s
+      @sha256 = sha256 ? self.class.normalize_sha256(sha256) : nil
+    end
+
+    # Normalizes a SHA-256 hex digest string (strips optional "sha256:" prefix and downcases).
+    def self.normalize_sha256(digest : String) : String
+      cleaned = digest.strip.tr("\"", "")
+      if cleaned.downcase.starts_with?("sha256:")
+        cleaned = cleaned[7..-1]
+      elsif cleaned.downcase.starts_with?("sha256-")
+        cleaned = cleaned[7..-1]
+      end
+      cleaned.strip.downcase
     end
 
     # Opens a readable stream for this asset.
@@ -64,9 +79,75 @@ module Bakelite
       sprintf("%08x", @crc32)
     end
 
+    # Returns the deterministic 64-character lowercase hex SHA-256 digest of the uncompressed content.
+    # Lazily computed and cached on first access in O(chunk_size) streaming memory.
+    def sha256 : String
+      @sha256 ||= compute_sha256
+    end
+
+    # Assigns a verified lowercase SHA-256 hex digest to cache.
+    protected def sha256=(digest : String) : String
+      @sha256 = self.class.normalize_sha256(digest)
+    end
+
+    # Recomputes the lowercase hex SHA-256 digest by streaming the uncompressed content.
+    def compute_sha256 : String
+      hasher = Digest::SHA256.new
+      open do |stream|
+        buffer = Bytes.new(65536)
+        while (read_bytes = stream.read(buffer)) > 0
+          hasher.update(buffer[0, read_bytes])
+        end
+      end
+      hasher.hexfinal
+    end
+
+    # Recomputes the CRC32 checksum by streaming the uncompressed content.
+    def compute_crc32 : UInt32
+      running_crc = Digest::CRC32.initial
+      open do |stream|
+        buffer = Bytes.new(65536)
+        while (read_bytes = stream.read(buffer)) > 0
+          running_crc = Digest::CRC32.update(buffer[0, read_bytes], running_crc)
+        end
+      end
+      running_crc
+    end
+
+    # Returns the 32-byte binary SHA-256 digest of the uncompressed content.
+    def sha256_bytes : Bytes
+      sha256.hexbytes
+    end
+
+    # Returns the canonical deterministic content address URI ("sha256:<hex>").
+    def content_address : String
+      "sha256:#{sha256}"
+    end
+
+    # Verifies that the freshly streamed SHA-256 digest matches the expected digest.
+    def verify_sha256?(expected_digest : String) : Bool
+      actual = compute_sha256
+      @sha256 = actual
+      actual == self.class.normalize_sha256(expected_digest)
+    rescue
+      false
+    end
+
+    # Verifies that the freshly streamed CRC32 checksum matches the recorded metadata crc32.
+    def verify_crc32? : Bool
+      compute_crc32 == @crc32
+    rescue
+      false
+    end
+
     # HTTP-compliant ETag string based on CRC32 checksum and file size.
     def etag : String
       "\"#{crc32_hex}-#{@size}\""
+    end
+
+    # Content-addressed strong HTTP ETag based on SHA-256 digest.
+    def strong_etag : String
+      "\"sha256-#{sha256}\""
     end
 
     # Extracts this virtual file to a target path on disk.
@@ -95,6 +176,7 @@ module Bakelite
       @data : Bytes,
       mime_type : String? = nil,
       crc32 : UInt32? = nil,
+      sha256 : String? = nil,
     )
       computed_mime = mime_type || MIME.from_path(path)
       computed_crc = crc32 || Digest::CRC32.checksum(@data)
@@ -105,7 +187,8 @@ module Bakelite
         compressed_size: @data.size.to_i64,
         mime_type: computed_mime,
         crc32: computed_crc,
-        storage_mode: StorageMode::Bake
+        storage_mode: StorageMode::Bake,
+        sha256: sha256
       )
     end
 
@@ -116,8 +199,9 @@ module Bakelite
       str : String,
       mime_type : String? = nil,
       crc32 : UInt32? = nil,
+      sha256 : String? = nil,
     ) : BakedItem
-      new(path, volume_name, str.to_slice, mime_type, crc32)
+      new(path, volume_name, str.to_slice, mime_type, crc32, sha256)
     end
 
     def open : IO
@@ -134,6 +218,14 @@ module Bakelite
 
     def to_s : String
       String.new(@data)
+    end
+
+    def compute_sha256 : String
+      Digest::SHA256.hexdigest(@data)
+    end
+
+    def compute_crc32 : UInt32
+      Digest::CRC32.checksum(@data)
     end
   end
 
@@ -154,6 +246,7 @@ module Bakelite
       mime_type : String? = nil,
       crc32 : UInt32 = 0_u32,
       @underlying_io : IO? = nil,
+      sha256 : String? = nil,
     )
       computed_mime = mime_type || MIME.from_path(path)
       super(
@@ -163,7 +256,8 @@ module Bakelite
         compressed_size: compressed_size,
         mime_type: computed_mime,
         crc32: crc32,
-        storage_mode: StorageMode::Store
+        storage_mode: StorageMode::Store,
+        sha256: sha256
       )
     end
 

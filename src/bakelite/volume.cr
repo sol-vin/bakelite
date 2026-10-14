@@ -1,5 +1,6 @@
 require "file_utils"
 require "path"
+require "digest/sha256"
 require "./types"
 require "./item"
 
@@ -86,6 +87,80 @@ module Bakelite
     # Iterates over all items in this volume.
     def each_file(&block : Item ->) : Nil
       @items.each_value(&block)
+    end
+
+    # Returns a deterministically sorted mapping of normalized relative file paths to SHA-256 hex digests.
+    def content_manifest : Hash(String, String)
+      manifest = Hash(String, String).new(initial_capacity: @items.size)
+      @items.keys.sort.each do |rel_path|
+        manifest[rel_path] = @items[rel_path].sha256
+      end
+      manifest
+    end
+
+    # Computes a deterministic SHA-256 manifest digest over all files in this volume.
+    # Order-independent: identical files produce an identical 64-character hex digest.
+    def manifest_sha256 : String
+      hasher = Digest::SHA256.new
+      hasher << "bakelite-manifest-v1\n"
+      @items.keys.sort.each do |rel_path|
+        item = @items[rel_path]
+        hasher << rel_path
+        hasher << "\0"
+        hasher << item.size.to_s
+        hasher << "\0"
+        hasher << item.crc32_hex
+        hasher << "\0"
+        hasher << item.sha256
+        hasher << "\n"
+      end
+      hasher.hexfinal
+    end
+
+    # Alias for manifest_sha256.
+    def sha256 : String
+      manifest_sha256
+    end
+
+    # Canonical content address URI for this volume's manifest ("sha256:<hex>").
+    def content_address : String
+      "sha256:#{manifest_sha256}"
+    end
+
+    # Finds the first item (in deterministic lexicographical path order) matching a SHA-256 content address.
+    def find_by_sha256(digest : String) : Item?
+      norm = Item.normalize_sha256(digest)
+      @items.keys.sort.each do |rel_path|
+        item = @items[rel_path]
+        return item if item.sha256 == norm
+      end
+      nil
+    end
+
+    # Alias for find_by_sha256.
+    def get_by_sha256?(digest : String) : Item?
+      find_by_sha256(digest)
+    end
+
+    # Fetches an item by its SHA-256 content address, raising KeyError if not found.
+    def get_by_sha256(digest : String) : Item
+      find_by_sha256(digest) || raise KeyError.new("Content address '#{digest}' not found in volume '#{@name}'")
+    end
+
+    # Finds all items in this volume matching a SHA-256 content address (in deterministic path order).
+    def find_all_by_sha256(digest : String) : Array(Item)
+      norm = Item.normalize_sha256(digest)
+      matched = [] of Item
+      @items.keys.sort.each do |rel_path|
+        item = @items[rel_path]
+        matched << item if item.sha256 == norm
+      end
+      matched
+    end
+
+    # Checks whether an item with the given SHA-256 content address exists in this volume.
+    def has_sha256?(digest : String) : Bool
+      !find_by_sha256(digest).nil?
     end
 
     # Returns all relative paths starting with the given prefix.
