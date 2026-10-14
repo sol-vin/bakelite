@@ -11,8 +11,7 @@ features:
   protect_summary: true
   summary_table: true
   master_index: true
-  aliases:
-    - "Docs"
+  aliases: []
   quick_start:
     title: "Bakelite Quick Start"
     commands:

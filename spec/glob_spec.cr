@@ -36,4 +36,10 @@ describe "Bakelite::Glob" do
     Bakelite::Glob.match?("src/docs/chapter1.md", patterns, excludes).should be_false
     Bakelite::Glob.match?("src/asset.uid", patterns, excludes).should be_false
   end
+
+  it "distinguishes anchored directory wildcards from unanchored '**/dir/**' wildcards" do
+    Bakelite::Glob.match?("docs/guide.md", ["**/*"], ["docs/**"]).should be_false
+    Bakelite::Glob.match?("libgodot/docs/guide.md", ["**/*"], ["docs/**"]).should be_true
+    Bakelite::Glob.match?("libgodot/docs/guide.md", ["**/*"], ["**/docs/**"]).should be_false
+  end
 end

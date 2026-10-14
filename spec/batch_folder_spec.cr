@@ -7,7 +7,7 @@ module TestBatchFolderApp
   bake_folder "spec/fixtures/test_project/template", prefix: "baked_tmpl", volume: :tmpl_baked
 
   # Single-pass batch folder store with chunking and deflate compression
-  store_folder "spec/fixtures/test_project/src", prefix: "stored_src", volume: :src_stored, chunk_size: 64, exclude: ["main.cr", "docs/**"]
+  store_folder "spec/fixtures/test_project/src", prefix: "stored_src", volume: :src_stored, chunk_size: 64, exclude: ["main.cr", "**/docs/**"]
 
   # Single-pass batch folder embed with auto threshold
   embed_folder "spec/fixtures/test_project/template", prefix: "auto_tmpl", volume: :tmpl_auto, threshold: 1024

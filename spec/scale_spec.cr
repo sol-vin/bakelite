@@ -6,8 +6,12 @@ class SyntheticPatternIO < IO
   getter size : Int64
   getter pos : Int64 = 0_i64
   getter chunk_size : Int32
+  @body_template : Bytes
 
   def initialize(@size : Int64, @chunk_size : Int32 = 65536)
+    @body_template = Bytes.new(@chunk_size) do |offset_in_chunk|
+      ((offset_in_chunk % 26) + 65).to_u8
+    end
   end
 
   def read(slice : Bytes) : Int32
@@ -19,20 +23,27 @@ class SyntheticPatternIO < IO
       curr_abs = @pos + bytes_written
       chunk_idx = (curr_abs // @chunk_size).to_i32
       offset_in_chunk = (curr_abs % @chunk_size).to_i32
+      remaining = to_read - bytes_written
 
-      byte_val = if offset_in_chunk < 32
-                   header_str = sprintf("CHK_%08d_OFF_%014d\n", chunk_idx, (chunk_idx.to_i64 * @chunk_size))
-                   header_str.to_slice[offset_in_chunk]
-                 elsif offset_in_chunk >= (@chunk_size - 16)
-                   footer_str = sprintf("\nEND_%08d\n\n\n\n\n", chunk_idx)
-                   idx_in_footer = offset_in_chunk - (@chunk_size - 16)
-                   footer_str.to_slice[idx_in_footer]
-                 else
-                   ((offset_in_chunk % 26) + 65).to_u8
-                 end
-
-      slice[bytes_written] = byte_val
-      bytes_written += 1
+      if offset_in_chunk < 32
+        header_str = sprintf("CHK_%08d_OFF_%014d\n", chunk_idx, (chunk_idx.to_i64 * @chunk_size))
+        header_slice = header_str.to_slice
+        copy_len = Math.min(remaining, 32 - offset_in_chunk)
+        slice[bytes_written, copy_len].copy_from(header_slice[offset_in_chunk, copy_len])
+        bytes_written += copy_len
+      elsif offset_in_chunk < (@chunk_size - 16)
+        body_end = @chunk_size - 16
+        copy_len = Math.min(remaining, body_end - offset_in_chunk)
+        slice[bytes_written, copy_len].copy_from(@body_template[offset_in_chunk, copy_len])
+        bytes_written += copy_len
+      else
+        footer_str = sprintf("\nEND_%08d\n\n\n\n\n", chunk_idx)
+        footer_slice = footer_str.to_slice
+        idx_in_footer = offset_in_chunk - (@chunk_size - 16)
+        copy_len = Math.min(remaining, 16 - idx_in_footer)
+        slice[bytes_written, copy_len].copy_from(footer_slice[idx_in_footer, copy_len])
+        bytes_written += copy_len
+      end
     end
 
     @pos += to_read
